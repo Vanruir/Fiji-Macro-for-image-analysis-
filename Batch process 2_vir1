@@ -1,0 +1,317 @@
+// Step 1: Open one folder
+dir = getDirectory("Choose a Folder");
+list = getFileList(dir);
+groups = newArray();
+
+// Function to extract group number from filename
+function extractGroupNumber(filename) {
+    parts = split(filename, "_");
+    for (k = 0; k < parts.length; k++) {
+        if (matches(parts[k], "^[0-9]+$")) {
+            return parts[k];
+        }
+    }
+    return "";
+}
+
+// Identify all groups
+for (i = 0; i < list.length; i++) {
+    if (endsWith(list[i], "_C0.tif") || endsWith(list[i], "_C1.tif") || endsWith(list[i], "_C2.tif")) {
+        groupNumber = extractGroupNumber(list[i]);
+        
+        // Check if groupNumber is not already in the array
+        alreadyExists = false;
+        for (j = 0; j < lengthOf(groups); j++) {
+            if (groups[j] == groupNumber) {
+                alreadyExists = true;
+                break;
+            }
+        }
+        if (!alreadyExists && groupNumber != "") {
+            groups = Array.concat(groups, groupNumber);
+        }
+    }
+}
+
+// Ask user which group to process
+Dialog.create("Select a Group to Process");
+Dialog.addChoice("Group:", groups);
+Dialog.show();
+selectedGroup = Dialog.getChoice();
+
+// Ask user at what step to continue
+Dialog.create("Select Step to Continue");
+Dialog.addChoice("Step:", newArray("1", "2", "3"));
+Dialog.show();
+selectedStep = Dialog.getChoice();
+
+// Function to repeat step selection process
+function repeatStepSelection() {
+    Dialog.create("Select Step to Continue or Stop");
+    Dialog.addChoice("Step:", newArray("1", "2", "3", "Stop"));
+    Dialog.show();
+    selectedStep = Dialog.getChoice();
+    return selectedStep;
+}
+
+// Process the selected group
+if (selectedStep == "1") {
+    for (i = 0; i < list.length; i++) {
+        if (endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+            imagePath = dir + list[i];
+            open(imagePath);
+            originalImageID = getImageID();
+            run("Duplicate...", "title=Duplicated_" + list[i]);
+            selectImage(originalImageID);
+            close();
+            
+            // Allow user to adjust the duplicated image
+            waitForUser("Adjust the C1 image, then click OK to proceed to threshold adjustment.");
+            
+            // Proceed to threshold adjustment
+            run("Threshold...");
+            waitForUser("Adjust the threshold for the C1 image, then click OK to proceed.");
+            
+            // Save the adjusted image
+            saveAs("Tiff", dir + "Duplicated_" + list[i]);
+            
+            // Step 2: Further adjustments
+            waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+            
+            // Save the final adjusted image as "Mask_"
+            saveAs("Tiff", dir + "Mask_" + list[i]);
+            close();
+        }
+    }
+} else if (selectedStep == "2") {
+    duplicatedFileFound = false;
+    for (i = 0; i < list.length; i++) {
+        if (startsWith(list[i], "Duplicated_") && endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+            imagePath = dir + list[i];
+            open(imagePath);
+            duplicatedFileFound = true;
+            
+            // Step 2: Further adjustments
+            waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+            
+            // Save the final adjusted image as "Mask_"
+            saveAs("Tiff", dir + "Mask_" + list[i]);
+            close();
+            break;
+        }
+    }
+    
+    if (!duplicatedFileFound) {
+        Dialog.create("No Duplicated File Detected");
+        Dialog.addMessage("No duplicated C1 file detected for the selected group.");
+        Dialog.show();
+        
+        // Prompt user to select another step or stop
+        selectedStep = repeatStepSelection();
+        // Restart script based on the selected step
+        if (selectedStep != "Stop") {
+            if (selectedStep == "1") {
+                for (i = 0; i < list.length; i++) {
+                    if (endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        imagePath = dir + list[i];
+                        open(imagePath);
+                        originalImageID = getImageID();
+                        run("Duplicate...", "title=Duplicated_" + list[i]);
+                        selectImage(originalImageID);
+                        close();
+                        
+                        // Allow user to adjust the duplicated image
+                        waitForUser("Adjust the C1 image, then click OK to proceed to threshold adjustment.");
+                        
+                        // Proceed to threshold adjustment
+                        run("Threshold...");
+                        waitForUser("Adjust the threshold for the C1 image, then click OK to proceed.");
+                        
+                        // Save the adjusted image
+                        saveAs("Tiff", dir + "Duplicated_" + list[i]);
+                        
+                        // Step 2: Further adjustments
+                        waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+                        
+                        // Save the final adjusted image as "Mask_"
+                        saveAs("Tiff", dir + "Mask_" + list[i]);
+                        close();
+                    }
+                }
+            } else if (selectedStep == "2") {
+                duplicatedFileFound = false;
+                for (i = 0; i < list.length; i++) {
+                    if (startsWith(list[i], "Duplicated_") && endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        imagePath = dir + list[i];
+                        open(imagePath);
+                        duplicatedFileFound = true;
+                        
+                        // Step 2: Further adjustments
+                        waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+                        
+                        // Save the final adjusted image as "Mask_"
+                        saveAs("Tiff", dir + "Mask_" + list[i]);
+                        close();
+                        break;
+                    }
+                }
+                
+                if (!duplicatedFileFound) {
+                    Dialog.create("No Duplicated File Detected");
+                    Dialog.addMessage("No duplicated C1 file detected for the selected group.");
+                    Dialog.show();
+                }
+            }
+        }
+    }
+} else if (selectedStep == "3") {
+    C0FileFound = false;
+    maskFileFound = false;
+    C0FilePath = "";
+    maskFilePath = "";
+    
+    for (i = 0; i < list.length; i++) {
+        if (endsWith(list[i], "_C0.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+            C0FilePath = dir + list[i];
+            C0FileFound = true;
+        }
+        if (startsWith(list[i], "Mask_") && endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+            maskFilePath = dir + list[i];
+            maskFileFound = true;
+        }
+    }
+    
+    if (C0FileFound && maskFileFound) {
+        open(C0FilePath);
+        C0FileID = getImageID();
+        open(maskFilePath);
+        maskFileID = getImageID();
+        
+        // Use Image Calculator with AND function
+        imageCalculator("AND create", C0FileID, maskFileID);
+        rename("Double mask_" + getTitle(C0FileID));
+        
+        // Save the new image
+        saveAs("Tiff", dir + "Double mask_" + getTitle(C0FileID));
+        
+        // Close the images
+        close(C0FileID);
+        close(maskFileID);
+        close();
+    } else {
+        if (!C0FileFound) {
+            Dialog.create("C0 File Not Detected");
+            Dialog.addMessage("No C0 file detected for the selected group.");
+            Dialog.show();
+        }
+        if (!maskFileFound) {
+            Dialog.create("Mask File Not Detected");
+            Dialog.addMessage("No mask file detected for the selected group.");
+            Dialog.show();
+        }
+        
+        // Prompt user to select another step or stop
+        selectedStep = repeatStepSelection();
+        // Restart script based on the selected step
+        if (selectedStep != "Stop") {
+            if (selectedStep == "1") {
+                for (i = 0; i < list.length; i++) {
+                    if (endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        imagePath = dir + list[i];
+                        open(imagePath);
+                        originalImageID = getImageID();
+                        run("Duplicate...", "title=Duplicated_" + list[i]);
+                        selectImage(originalImageID);
+                        close();
+                        
+                        // Allow user to adjust the duplicated image
+                        waitForUser("Adjust the C1 image, then click OK to proceed to threshold adjustment.");
+                        
+                        // Proceed to threshold adjustment
+                        run("Threshold...");
+                        waitForUser("Adjust the threshold for the C1 image, then click OK to proceed.");
+                        
+                        // Save the adjusted image
+                        saveAs("Tiff", dir + "Duplicated_" + list[i]);
+                        
+                        // Step 2: Further adjustments
+                        waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+                        
+                        // Save the final adjusted image as "Mask_"
+                        saveAs("Tiff", dir + "Mask_" + list[i]);
+                        close();
+                    }
+                }
+            } else if (selectedStep == "2") {
+                duplicatedFileFound = false;
+                for (i = 0; i < list.length; i++) {
+                    if (startsWith(list[i], "Duplicated_") && endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        imagePath = dir + list[i];
+                        open(imagePath);
+                        duplicatedFileFound = true;
+                        
+                        // Step 2: Further adjustments
+                        waitForUser("Continue adjusting the C1 image, then click OK when finished.");
+                        
+                        // Save the final adjusted image as "Mask_"
+                        saveAs("Tiff", dir + "Mask_" + list[i]);
+                        close();
+                        break;
+                    }
+                }
+                
+                if (!duplicatedFileFound) {
+                    Dialog.create("No Duplicated File Detected");
+                    Dialog.addMessage("No duplicated C1 file detected for the selected group.");
+                    Dialog.show();
+                }
+            } else if (selectedStep == "3") {
+                C0FileFound = false;
+                maskFileFound = false;
+                C0FilePath = "";
+                maskFilePath = "";
+                
+                for (i = 0; i < list.length; i++) {
+                    if (endsWith(list[i], "_C0.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        C0FilePath = dir + list[i];
+                        C0FileFound = true;
+                    }
+                    if (startsWith(list[i], "Mask_") && endsWith(list[i], "_C1.tif") && indexOf(list[i], "_" + selectedGroup + "_") >= 0) {
+                        maskFilePath = dir + list[i];
+                        maskFileFound = true;
+                    }
+                }
+                
+                if (C0FileFound && maskFileFound) {
+                    open(C0FilePath);
+                    C0FileID = getImageID();
+                    open(maskFilePath);
+                    maskFileID = getImageID();
+                    
+                    // Use Image Calculator with AND function
+                    imageCalculator("AND create", C0FileID, maskFileID);
+                    rename("Double mask_" + getTitle(C0FileID));
+                    
+                    // Save the new image
+                    saveAs("Tiff", dir + "Double mask_" + getTitle(C0FileID));
+                    
+                    // Close the images
+                    close(C0FileID);
+                    close(maskFileID);
+                    close();
+                } else {
+                    if (!C0FileFound) {
+                        Dialog.create("C0 File Not Detected");
+                        Dialog.addMessage("No C0 file detected for the selected group.");
+                        Dialog.show();
+                    }
+                    if (!maskFileFound) {
+                        Dialog.create("Mask File Not Detected");
+                        Dialog.addMessage("No mask file detected for the selected group.");
+                        Dialog.show();
+                    }
+                }
+            }
+        }
+    }
+}
